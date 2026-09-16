@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-title" content="Lednice">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Lednice</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon-precomposed" href="apple-touch-icon.png">
 <style>
   *{-webkit-box-sizing:border-box;box-sizing:border-box;-webkit-tap-highlight-color:rgba(0,0,0,0);}
   html,body{margin:0;padding:0;}
@@ -76,6 +78,14 @@
   .name{font-size:23px;font-weight:600;letter-spacing:-0.01em;}
   .since{font-size:16px;color:#737C77;margin-top:1px;}
   .card.first .since{color:#A8402F;font-weight:600;}
+  .cat-tag{display:block;font-size:14px;color:#737C77;margin-top:3px;}
+  .cat-tag .cat-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px;}
+
+  .filter-row{margin:0 0 26px;overflow:hidden;}
+  .filter-row .pill{
+    height:52px;padding:0 22px;font-size:17px;font-weight:600;line-height:50px;
+    float:left;margin:0 10px 10px 0;
+  }
 
   .row{
     display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;
@@ -129,6 +139,7 @@
     margin-bottom:18px;-webkit-appearance:none;
   }
   .emoji-pick{margin-bottom:24px;overflow:hidden;}
+  #newCategory{width:100%;margin-bottom:18px;display:block;height:60px;}
   .emoji-pick button{
     width:64px;height:64px;border-radius:18px;background:#F4F6F3;font-size:30px;
     line-height:64px;text-align:center;float:left;margin:0 10px 10px 0;padding:0;
@@ -153,6 +164,8 @@
   </div>
 </header>
 
+<div class="filter-row" id="catFilter"></div>
+
 <div id="board"></div>
 
 <div class="veil" id="confirmVeil">
@@ -171,6 +184,7 @@
     <h2>Přidat potravinu</h2>
     <p>Vyberte obrázek a napište název.</p>
     <input type="text" id="newName" placeholder="Jogurt" autocomplete="off" autocapitalize="words">
+    <select id="newCategory"></select>
     <div class="emoji-pick" id="emojiPick"></div>
     <div class="sheet-btns">
       <button class="btn" id="addCancel">Zrušit</button>
@@ -192,18 +206,34 @@
 
   function ago(d){ return Date.now() - d * DAY; }
 
-  var SEED = [
-    { emoji:"\uD83E\uDDC0", name:"Čedar",      unopened:2, opened:[ago(4)] },
-    { emoji:"\uD83E\uDD53", name:"Šunka",      unopened:1, opened:[ago(1)] },
-    { emoji:"\uD83E\uDD5B", name:"Smetana",    unopened:2, opened:[] },
-    { emoji:"\uD83C\uDF55", name:"Mozzarella", unopened:1, opened:[] },
-    { emoji:"\uD83C\uDF3F", name:"Pesto",      unopened:0, opened:[ago(6)] }
+  var CATEGORIES = [
+    { id:"mlecne",   label:"Mléčné výrobky",        color:"#4C86C7" },
+    { id:"syry",     label:"Sýry",                   color:"#C79A3B" },
+    { id:"maso",     label:"Maso a uzeniny",         color:"#B24B3E" },
+    { id:"zelenina", label:"Zelenina a ovoce",       color:"#4C9A5B" },
+    { id:"omacky",   label:"Omáčky",                 color:"#8A5FA8" },
+    { id:"hotova",   label:"Hotová jídla a zbytky",  color:"#B8792E" },
+    { id:"ostatni",  label:"Ostatní",                color:"#8B9A94" }
   ];
 
-  var EMOJIS = ["\uD83E\uDDC0","\uD83E\uDD53","\uD83E\uDD5B","\uD83C\uDF55","\uD83C\uDF3F",
-                "\uD83E\uDDC8","\uD83E\uDD5A","\uD83C\uDF5E","\uD83E\uDD57","\uD83C\uDF45",
-                "\uD83C\uDF4E","\uD83E\uDD55","\uD83C\uDF57","\uD83D\uDC1F","\uD83C\uDF5D",
-                "\uD83E\uDD6B","\uD83C\uDF66","\uD83E\uDDC3","\uD83E\uDD6C","\uD83C\uDF5A"];
+  function catInfo(id) {
+    for (var i = 0; i < CATEGORIES.length; i++) if (CATEGORIES[i].id === id) return CATEGORIES[i];
+    return CATEGORIES[CATEGORIES.length - 1];
+  }
+
+  var SEED = [
+    { emoji:"\uD83E\uDDC0", name:"Čedar",      unopened:2, opened:[ago(4)], category:"syry" },
+    { emoji:"\uD83C\uDF56", name:"Šunka",      unopened:1, opened:[ago(1)], category:"maso" },
+    { emoji:"\uD83C\uDF7C", name:"Smetana",    unopened:2, opened:[],       category:"mlecne" },
+    { emoji:"\uD83C\uDF55", name:"Mozzarella", unopened:1, opened:[],       category:"syry" },
+    { emoji:"\uD83C\uDF3F", name:"Pesto",      unopened:0, opened:[ago(6)], category:"omacky" }
+  ];
+
+  /* jen emoji, které umí i starší iOS (do cca roku 2015) - žádné prázdné čtverečky */
+  var EMOJIS = ["\uD83E\uDDC0","\uD83C\uDF56","\uD83C\uDF7C","\uD83C\uDF55","\uD83C\uDF3F",
+                "\uD83C\uDF5E","\uD83C\uDF73","\uD83C\uDF43","\uD83C\uDF45","\uD83C\uDF4E",
+                "\uD83C\uDF3D","\uD83C\uDF57","\uD83D\uDC1F","\uD83C\uDF5D","\uD83C\uDF76",
+                "\uD83C\uDF71","\uD83C\uDF66","\uD83C\uDF79","\uD83C\uDF47","\uD83C\uDF6B"];
 
   var state = load();
   var pickedEmoji = EMOJIS[0];
@@ -232,6 +262,7 @@
       id: p.id || (Date.now().toString(36) + Math.round(Math.random() * 1e9).toString(36)),
       emoji: p.emoji || "\uD83C\uDF7D",
       name: p.name || "Potravina",
+      category: p.category || "ostatni",
       unopened: Math.max(0, p.unopened | 0),
       opened: p.opened && p.opened.length ? p.opened.slice() : []
     };
@@ -278,6 +309,7 @@
   }
 
   var board = document.getElementById("board");
+  var activeCategory = "vse";
 
   var SECTIONS = [
     { key:"first", dot:"#A8402F", title:"Dojíst nejdřív",    note:"Otevřené už delší dobu — tyhle snězte jako první." },
@@ -286,20 +318,48 @@
     { key:"gone",  dot:"#9AA39D", title:"Došlo",             note:"Doma už nic nezbylo." }
   ];
 
+  function renderFilters() {
+    var box = document.getElementById("catFilter");
+    box.innerHTML = "";
+
+    var all = document.createElement("button");
+    all.className = "pill" + (activeCategory === "vse" ? " on" : "");
+    all.textContent = "Vše";
+    all.onclick = function () { activeCategory = "vse"; render(); };
+    box.appendChild(all);
+
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      (function (cat) {
+        var b = document.createElement("button");
+        b.className = "pill" + (activeCategory === cat.id ? " on" : "");
+        b.textContent = cat.label;
+        b.onclick = function () { activeCategory = cat.id; render(); };
+        box.appendChild(b);
+      })(CATEGORIES[i]);
+    }
+  }
+
   function render() {
     var now = new Date();
     document.getElementById("today").textContent =
       DNY[now.getDay()] + " " + now.getDate() + ". " + MESICE[now.getMonth()];
 
+    renderFilters();
     board.innerHTML = "";
 
     for (var s = 0; s < SECTIONS.length; s++) {
       (function (sec) {
-        var items = [], i;
+        var raw = [], items = [], i;
         for (i = 0; i < state.products.length; i++) {
-          if (bucket(state.products[i]) === sec.key) items.push(state.products[i]);
+          if (bucket(state.products[i]) === sec.key) raw.push(state.products[i]);
         }
-        if (sec.key === "gone" && !items.length) return;
+        if (sec.key === "gone" && !raw.length) return;
+
+        for (i = 0; i < raw.length; i++) {
+          if (activeCategory === "vse" || raw[i].category === activeCategory) items.push(raw[i]);
+        }
+        /* pokud filtr vynechal celou sekci, radeji ji vubec neukazovat nez psat "prazdno" */
+        if (!items.length && activeCategory !== "vse" && raw.length) return;
 
         items.sort(function (a, b) {
           var oa = oldest(a), ob = oldest(b);
@@ -348,11 +408,14 @@
 
     var top = document.createElement("div");
     top.className = "card-top";
-    top.innerHTML = '<div class="emoji"></div><div><div class="name"></div><div class="since"></div></div>';
+    top.innerHTML = '<div class="emoji"></div><div><div class="name"></div><div class="since"></div><div class="cat-tag"><span class="cat-dot"></span><span class="cat-label"></span></div></div>';
     top.getElementsByClassName("emoji")[0].textContent = p.emoji;
     top.getElementsByClassName("name")[0].textContent = p.name;
     top.getElementsByClassName("since")[0].textContent = o !== null ? sinceText(o)
       : (p.unopened > 0 ? "Zatím nic otevřené" : "Doma nic nemáme");
+    var ci = catInfo(p.category);
+    top.getElementsByClassName("cat-dot")[0].style.background = ci.color;
+    top.getElementsByClassName("cat-label")[0].textContent = ci.label;
     el.appendChild(top);
 
     el.appendChild(counterRow("Otevřená balení", p.opened.length,
@@ -466,6 +529,15 @@
   var aVeil = document.getElementById("addVeil");
   var nameInput = document.getElementById("newName");
   var pickBox = document.getElementById("emojiPick");
+  var catSelect = document.getElementById("newCategory");
+
+  for (var c = 0; c < CATEGORIES.length; c++) {
+    var opt = document.createElement("option");
+    opt.value = CATEGORIES[c].id;
+    opt.textContent = CATEGORIES[c].label;
+    if (CATEGORIES[c].id === "ostatni") opt.selected = true;
+    catSelect.appendChild(opt);
+  }
 
   for (var i = 0; i < EMOJIS.length; i++) {
     (function (em, idx) {
@@ -484,6 +556,7 @@
 
   document.getElementById("addBtn").onclick = function () {
     nameInput.value = "";
+    catSelect.value = "ostatni";
     aVeil.className = "veil show";
   };
   document.getElementById("addCancel").onclick = function () { aVeil.className = "veil"; };
@@ -492,7 +565,7 @@
   document.getElementById("addSave").onclick = function () {
     var name = nameInput.value.replace(/^\s+|\s+$/g, "");
     if (!name) { nameInput.focus(); return; }
-    state.products.push(withId({ emoji: pickedEmoji, name: name, unopened: 1, opened: [] }));
+    state.products.push(withId({ emoji: pickedEmoji, name: name, category: catSelect.value, unopened: 1, opened: [] }));
     aVeil.className = "veil";
     nameInput.blur();
     commit();
