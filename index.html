@@ -87,6 +87,21 @@
     float:left;margin:0 10px 10px 0;
   }
 
+  .search-bar{display:none;margin:0 0 26px;}
+  .search-bar.show{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;}
+  .search-bar input[type=text]{
+    -webkit-flex:1;flex:1;height:60px;border-radius:18px;border:1px solid #E2E6E0;
+    background:#F8F9F7;padding:0 20px;font-size:19px;font-family:inherit;color:#23282A;
+    margin:0 10px 0 0;-webkit-appearance:none;
+  }
+  .search-bar input[type=text]:focus{outline:none;border-color:#23282A;background:#FFFFFF;}
+  .search-bar button{
+    width:60px;height:60px;border-radius:50%;flex:none;-webkit-flex:none;
+    background:#F1F3EF;font-size:22px;line-height:60px;text-align:center;padding:0;
+  }
+  body.dark .search-bar input[type=text]{background:#2E332F;border-color:#363B36;color:#ECEEEA;}
+  body.dark .search-bar button{background:#2E332F;color:#ECEEEA;}
+
   .row{
     display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;
     padding:12px 0;border-top:1px solid #E2E6E0;margin-top:10px;
@@ -198,9 +213,15 @@
       <option value="7">Dojíst nejdřív po 7 dnech</option>
     </select>
     <button class="pill" id="manageBtn">Upravit seznam</button>
+    <button class="pill" id="searchBtn">&#128269; Vyhledat potravinu</button>
     <button class="pill primary" id="addBtn">Přidat potravinu</button>
   </div>
 </header>
+
+<div class="search-bar" id="searchBar">
+  <input type="text" id="searchInput" placeholder="Název potraviny..." autocomplete="off">
+  <button id="searchClose" aria-label="Zavřít hledání">&#10005;</button>
+</div>
 
 <div class="filter-row" id="catFilter"></div>
 
@@ -349,14 +370,21 @@
     return m;
   }
 
+  /* "Dojist nejdriv" plati jen pro potraviny, u kterych se otevrene balení rychle kazi */
+  var AGING_CATEGORIES = { mlecne:true, syry:true, maso:true };
+
   function bucket(p) {
     var o = oldest(p);
-    if (o !== null) return daysOld(o) >= state.agingDays ? "first" : "open";
+    if (o !== null) {
+      if (AGING_CATEGORIES[p.category] && daysOld(o) >= state.agingDays) return "first";
+      return "open";
+    }
     return p.unopened > 0 ? "stock" : "gone";
   }
 
   var board = document.getElementById("board");
   var activeCategory = "vse";
+  var searchQuery = "";
 
   var SECTIONS = [
     { key:"first", dot:"#A8402F", title:"Dojíst nejdřív",    note:"Otevřené už delší dobu — tyhle snězte jako první." },
@@ -393,9 +421,13 @@
 
     renderFilters();
     board.innerHTML = "";
+    var renderedSections = 0;
 
     for (var s = 0; s < SECTIONS.length; s++) {
       (function (sec) {
+        /* "Dojist nejdriv" se u filtru mimo mlecne/syry/maso vubec neukazuje */
+        if (sec.key === "first" && activeCategory !== "vse" && !AGING_CATEGORIES[activeCategory]) return;
+
         var raw = [], items = [], i;
         for (i = 0; i < state.products.length; i++) {
           if (bucket(state.products[i]) === sec.key) raw.push(state.products[i]);
@@ -403,10 +435,13 @@
         if (sec.key === "gone" && !raw.length) return;
 
         for (i = 0; i < raw.length; i++) {
-          if (activeCategory === "vse" || raw[i].category === activeCategory) items.push(raw[i]);
+          var matchCat = (activeCategory === "vse" || raw[i].category === activeCategory);
+          var matchSearch = (!searchQuery || raw[i].name.toLowerCase().indexOf(searchQuery) !== -1);
+          if (matchCat && matchSearch) items.push(raw[i]);
         }
-        /* pokud filtr vynechal celou sekci, radeji ji vubec neukazovat nez psat "prazdno" */
-        if (!items.length && activeCategory !== "vse" && raw.length) return;
+        /* pokud filtr (kategorie nebo hledani) vynechal celou sekci, radeji ji vubec neukazovat nez psat "prazdno" */
+        var filterActive = activeCategory !== "vse" || !!searchQuery;
+        if (!items.length && filterActive && raw.length) return;
 
         items.sort(function (a, b) {
           var oa = oldest(a), ob = oldest(b);
@@ -444,8 +479,21 @@
           el.appendChild(grid);
         }
         board.appendChild(el);
+        renderedSections++;
       })(SECTIONS[s]);
     }
+
+    if (!renderedSections && searchQuery) {
+      var noResult = document.createElement("div");
+      noResult.className = "empty-note";
+      noResult.textContent = "Nic jsme nenašli pro „" + searchInputValue() + "“.";
+      board.appendChild(noResult);
+    }
+  }
+
+  function searchInputValue() {
+    var el = document.getElementById("searchInput");
+    return el ? el.value : "";
   }
 
   function card(p, kind) {
@@ -645,6 +693,32 @@
     applyTheme();
   };
   applyTheme();
+
+  var searchBtn = document.getElementById("searchBtn");
+  var searchBar = document.getElementById("searchBar");
+  var searchInput = document.getElementById("searchInput");
+  var searchClose = document.getElementById("searchClose");
+
+  function closeSearch() {
+    searchBar.classList.remove("show");
+    searchInput.value = "";
+    searchQuery = "";
+    render();
+  }
+
+  searchBtn.onclick = function () {
+    if (searchBar.classList.contains("show")) {
+      closeSearch();
+    } else {
+      searchBar.classList.add("show");
+      setTimeout(function () { searchInput.focus(); }, 60);
+    }
+  };
+  searchClose.onclick = closeSearch;
+  searchInput.oninput = function () {
+    searchQuery = searchInput.value.toLowerCase();
+    render();
+  };
 
   var aging = document.getElementById("aging");
   aging.value = String(state.agingDays);
